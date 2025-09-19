@@ -1,0 +1,131 @@
+services:
+  vernemq1:
+    image: vernemq/vernemq
+    container_name: vernemq1.local
+    hostname: vernemq1.local
+    environment:
+      - DOCKER_VERNEMQ_ACCEPT_EULA=yes
+      - DOCKER_VERNEMQ_ALLOW_ANONYMOUS=on
+      - DOCKER_VERNEMQ_NODENAME=vernemq1.local
+      - DOCKER_VERNEMQ_DISCOVERY_NODE=vernemq1.local
+      - DOCKER_VERNEMQ_LISTENER__TCP__ALLOWED_PROTOCOL_VERSIONS=3,4,5,131,132
+      - DOCKER_VERNEMQ_LOG__CONSOLE__LEVEL=info #log.console.level = debug 
+    volumes:
+      - vernemq-etc:/vernemq/etc
+      - vernemq-data:/vernemq/data
+      - vernemq-log:/vernemq/log
+    ports:
+      - "1883:1883"
+      - "8888:8888"   # HTTP API
+      # - "8080:8080"   # WebSocket
+    networks:
+      - iot 
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    hostname: prometheus
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - iot
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    hostname: grafana
+    user: '0'
+    volumes:
+      - ./grafana/data:/var/lib/grafana
+      - ./grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./grafana/datasources:/etc/grafana/provisioning/datasources
+      - ./grafana/opt:/opt
+    environment:
+      - GF_SECURITY_ADMIN_USER=${ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin}
+      # - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-worldmap-panel,grafana-piechart-panel
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SECURITY_ANGULAR_SUPPORT_ENABLED=True
+      - GF_FEATURE_TOGGLES_ANGULARDEPRECATIONUI=False
+      - GF_USERS_ALLOW_ORG_CREATE=true
+    networks:
+      - iot
+    ports:
+      - '3000:3000'
+
+  influxdb8086:
+      image: influxdb:2.7
+      container_name: influxdb8086
+      hostname: influxdb8086
+      ports:
+        - "8086:8086"
+      volumes:
+        - ./influxdb8086/data:/var/lib/influxdb2
+        - ./influxdb8086/config:/etc/influxdb2
+        - ./influxdb8086/opt:/opt
+      environment:
+        - DOCKER_INFLUXDB_INIT_MODE=setup
+        - DOCKER_INFLUXDB_INIT_USERNAME=admin
+        - DOCKER_INFLUXDB_INIT_PASSWORD=admin123
+        - DOCKER_INFLUXDB_INIT_ORG=my-org
+        - DOCKER_INFLUXDB_INIT_BUCKET=iot_data
+        - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=mytoken
+      networks:
+        - iot
+
+  kafka:
+    image: bitnami/kafka:latest
+    # platform: linux/arm64
+    container_name: kafka
+    environment:
+      - KAFKA_KRAFT_MODE=true
+      - KAFKA_ENABLE_KRAFT=yes
+      - KAFKA_CFG_NODE_ID=1
+      - KAFKA_CFG_PROCESS_ROLES=broker,controller
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=1@kafka:9093
+      - KAFKA_CFG_LISTENERS=INTERNAL://:29092,EXTERNAL://:9092,CONTROLLER://:9093
+      - KAFKA_CFG_ADVERTISED_LISTENERS=INTERNAL://kafka:29092,EXTERNAL://host.docker.internal:9092
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+      - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=INTERNAL
+      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_KRAFT_CLUSTER_ID=abcdefghijklmnopqrstuv
+      - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true
+      - KAFKA_CFG_LOG_RETENTION_MS=1209600000
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+    networks:
+      - iot
+    volumes:
+      - kafka-data:/bitnami/kafka
+    restart: unless-stopped
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    # platform: linux/arm64
+    container_name: kafka-ui
+    depends_on:
+      - kafka
+    environment:
+      - DYNAMIC_CONFIG_ENABLED=true
+    volumes:
+      - ./kafka-ui/dynamic_config.yaml:/etc/kafkaui/dynamic_config.yaml
+    ports:
+      - "8080:8080"
+    networks:
+      - iot
+    restart: always
+
+networks:
+  iot:
+    driver: bridge
+
+volumes:
+  vernemq-data:
+  vernemq-log:
+  vernemq-etc:
+  prometheus-data:
+  kafka-data:

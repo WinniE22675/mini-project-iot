@@ -1,0 +1,12 @@
+services:
+  model-influx:
+    build:
+      context: ./app
+    env_file:
+      - .env
+    networks:
+      - iot-class-2025-mini-project_iot  
+
+networks:
+  iot-class-2025-mini-project_iot:
+    external: true

@@ -1,0 +1,11 @@
+services:
+  online-ml-predict:
+    build:
+      context: ./app
+    env_file:
+      - .env
+    volumes:
+      - ./app:/app
+
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
